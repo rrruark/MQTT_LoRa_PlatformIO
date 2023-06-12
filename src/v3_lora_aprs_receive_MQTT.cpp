@@ -34,8 +34,8 @@ volatile bool operation_done = true;
 #endif
 
 //Radio Config Parameters
-float lora_freq = 433.900;
-float lora_BW   = 10.4;
+float lora_freq = 445.900;
+float lora_BW   = 62.5;
 int   lora_SF   = 7;
 int   lora_PWR  = 10;
 byte  sync_word  = 0x42;
@@ -45,13 +45,17 @@ PubSubClient client(espClient);
 
 //Radio Declaration
 SX1262 radio = new Module(8, 14, 12, 13);
+PagerClient pager(&radio);
 
 //Function prototypes
 void config_radio();
+void config_pager(float freq, int baud);
+void pager_tx(String message, int id, int message_type);
 void setFlag();
 void setup_wifi();
 void reconnect();
 void callback(char* topic, byte* payload, unsigned int length);
+void initialize_topics();
 
 void setup() 
 {
@@ -84,7 +88,7 @@ void setup()
   //WiFi and MQTT setup
   setup_wifi();
   client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);  
+  client.setCallback(callback);
 }
 
 //Tells the main loop that a packet has been received.
@@ -138,7 +142,7 @@ void loop()
       StaticJsonDocument<32> rssi;
       doc["rssi"] = radio.getRSSI();
       serializeJson(doc, jsonBuffer);
-      client.publish("home/mgs", jsonBuffer);
+      client.publish("radio/received_lora", jsonBuffer);
 
       // Transmit the received message
       digitalWrite(35, HIGH);
@@ -166,73 +170,99 @@ void loop()
   }
 }
 
+//Callback function called when subscribed MQTT topic is updated.
 void callback(char* topic, byte* payload, unsigned int length) 
 {
   operation_done=false;
   Serial.print("Message received [");
   Serial.print(topic);
-  Serial.print("]: ");
-  String topic_local(topic); 
+  Serial.println("]: ");
+  String topic_local(topic);
 
-  if(topic_local=="home/mgs2")
+  char jsonMessage[length + 1];
+  memcpy(jsonMessage, payload, length);
+  jsonMessage[length] = '\0';
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, jsonMessage);
+
+  // Check if parsing was successful
+  if (error) {
+    Serial.print("JSON parsing failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  if(topic_local=="radio/lora_message")
   {
-    // Print the payload as a string
-    for (int i = 0; i < length; i++) {
-      Serial.print((char)payload[i]);
-    }
-    Serial.println();
+    String message = doc["message"].as<String>();
+    Serial.println(message);
     digitalWrite(35, HIGH);
-    radio.transmit(payload, length);
+    radio.transmit(message);
     digitalWrite(35, LOW);
     //delay(100);
     operation_done=true;
     radio.startReceive();
     receivedFlag = false;
   }
-  if(topic_local=="home/PWR")
+
+  if(topic_local=="radio/lora_config")
   {
-    String tempStr = "";
-    for (int i = 0; i < length; i++) {
-      tempStr.concat((char)payload[i]);
-    }
-    int temp_PWR = tempStr.toInt();
-    if(temp_PWR>-1 && temp_PWR<21)
-    {
-      lora_PWR = temp_PWR;
-      Serial.println();
-      Serial.print("Transmit power has been set to ");
-      Serial.println(lora_PWR);
-      config_radio();      
-    }
-    else
-    {
-      Serial.println();
-      Serial.print("Invalid power: ");
-      Serial.println(temp_PWR);      
-    }
+    float temp_freq = doc["lora_freq"];
+    lora_BW         = doc["lora_BW"];
+    int temp_SF     = doc["lora_SF"];
+    int temp_PWR    = doc["lora_PWR"];
+
+    if(temp_PWR>-1 && temp_PWR<21)         lora_PWR = temp_PWR;
+    if(temp_SF>5 && temp_SF<13)            lora_SF = temp_SF;
+    if(temp_freq>420.0 && temp_freq<450.0) lora_freq = temp_freq;
+
+    Serial.print("lora_freq: ");
+    Serial.println(lora_freq);
+    
+    Serial.print("lora_BW: ");
+    Serial.println(lora_BW);
+
+    Serial.print("lora_SF: ");
+    Serial.println(lora_SF);
+
+    Serial.print("lora_PWR: ");
+    Serial.println(lora_PWR);
+    Serial.println();
+
+    config_radio(); 
+    radio.startReceive();
+    receivedFlag = false;
   }
-  if(topic_local=="home/SF")
+
+  if(topic_local=="radio/pager_message")
   {
-    String tempStr = "";
-    for (int i = 0; i < length; i++) {
-      tempStr.concat((char)payload[i]);
-    }
-    int temp_SF = tempStr.toInt();
-    if(temp_SF>5 && temp_SF<13)
-    {
-      lora_SF = temp_SF;
-      Serial.println();
-      Serial.print("Transmit power has been set to ");
-      Serial.println(lora_PWR);
-      config_radio();      
-    }
-    else
-    {
-      Serial.println();
-      Serial.print("Invalid SF: ");
-      Serial.println(temp_SF);      
-    }
+    float frequency = doc["frequency"];
+    int id = doc["id"];
+    String message = doc["message"].as<String>();
+    int message_type = doc["message_type"];
+
+    Serial.print("Frequency: ");
+    Serial.println(frequency);
+    
+    Serial.print("ID: ");
+    Serial.println(id);
+
+    Serial.print("message_type: ");
+    Serial.println(message_type);
+
+    Serial.print("Message: ");
+    Serial.println(message);
+    Serial.println();
+
+    config_pager(frequency, 1200);
+    pager_tx(message,id,message_type);
+    //delay(100);
+    operation_done=true;
+    config_radio(); 
+    radio.startReceive();
+    receivedFlag = false;
   }
+
   else
   {
     Serial.println();
@@ -241,6 +271,7 @@ void callback(char* topic, byte* payload, unsigned int length)
 
 void config_radio()
 {
+  radio.reset();
   int state = radio.begin(lora_freq,lora_BW,lora_SF,5,sync_word,lora_PWR);
   if (state == RADIOLIB_ERR_NONE) 
   {
@@ -253,6 +284,55 @@ void config_radio()
     while (true);
   }  
   delay(100);
+}
+
+void config_pager(float freq, int baud)
+{
+  radio.reset();
+  int state = radio.beginFSK();
+  if (state == RADIOLIB_ERR_NONE) 
+  {
+    Serial.println(F("success!"));
+  } 
+  else 
+  {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+  }
+  Serial.print(F("[Pager] Initializing ... "));
+  state = pager.begin(freq, baud);
+  if (state == RADIOLIB_ERR_NONE) 
+  {
+    Serial.println(F("success!"));
+  } 
+  else 
+  {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    while (true);
+  }  
+  delay(100);
+}
+
+void pager_tx(String message, int id, int message_type)
+{
+  digitalWrite(35, HIGH);
+  int state;
+  if(message_type==0)
+  {
+    state = pager.transmit(message, id);
+  }
+  else if(message_type==1)
+  {
+    state = pager.transmit(message, id, RADIOLIB_PAGER_ASCII);
+  }
+  digitalWrite(35, LOW);
+  if(state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+  }
 }
 
 void setup_wifi() 
@@ -292,9 +372,10 @@ void reconnect()
     Serial.println("connected");
 
     // Subscribe to the MQTT topic
-    client.subscribe("home/mgs2");
-    client.subscribe("home/SF");
-    client.subscribe("home/PWR");
+    client.subscribe("radio/lora_message");
+    client.subscribe("radio/pager_message");
+    client.subscribe("radio/lora_config");
+    
   } 
   else 
   {
@@ -303,4 +384,20 @@ void reconnect()
     //Serial.println(" try again in 5 seconds");
     //delay(5000);
   }
+  delay(500);
+  initialize_topics();
+}
+
+void initialize_topics()
+{
+  StaticJsonDocument<200> topics;
+  char jsonBuffer[256];
+  topics["lora_freq"] = lora_freq;
+  topics["lora_BW"] = lora_BW;
+  topics["lora_SF"] = lora_SF;
+  topics["lora_PWR"] = lora_PWR;
+
+  serializeJson(topics, jsonBuffer);
+
+  client.publish("radio/lora_config", jsonBuffer);
 }
