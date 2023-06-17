@@ -449,7 +449,7 @@
 <vertex x="2.916728125" y="67.53610625"/>
 <vertex x="2.9949625" y="67.71390625"/>
 </polygon>
-<text x="3.4793375" y="64.88891875" size="1.016" layer="29" font="vector" ratio="15" rot="R270">025</text>
+<text x="3.4793375" y="64.88891875" size="1.016" layer="29" font="vector" ratio="15" rot="R270">027</text>
 <text x="5.27105625" y="70.61661875" size="1.016" layer="21" font="vector" ratio="15" rot="R90">MMXXIII</text>
 </plain>
 <libraries>

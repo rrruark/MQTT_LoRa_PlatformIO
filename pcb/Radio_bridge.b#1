@@ -1207,7 +1207,7 @@ design rules under a new name.</description>
 <attribute name="NAME" x="44.196" y="95.758" size="1.016" layer="25" font="vector" rot="R270"/>
 <attribute name="VALUE" x="41.656" y="96.266" size="1.016" layer="27" font="vector" rot="R270"/>
 </element>
-<element name="R2" library="ruark2" package="0603" value="10k" x="45.974" y="94.996" smashed="yes" rot="R270">
+<element name="R2" library="ruark2" package="0603" value="1k" x="45.974" y="94.996" smashed="yes" rot="R270">
 <attribute name="NAME" x="46.736" y="95.758" size="1.016" layer="25" font="vector" rot="R270"/>
 <attribute name="VALUE" x="44.196" y="96.266" size="1.016" layer="27" font="vector" rot="R270"/>
 </element>
@@ -1311,7 +1311,7 @@ design rules under a new name.</description>
 <attribute name="NAME" x="65.786" y="90.678" size="1.016" layer="25" font="vector"/>
 <attribute name="VALUE" x="65.278" y="92.964" size="1.016" layer="27" font="vector" rot="R180"/>
 </element>
-<element name="R20" library="ruark2" package="0603" value="10" x="35.56" y="2.54" smashed="yes" rot="R90">
+<element name="R20" library="ruark2" package="0603" value="0" x="35.56" y="2.54" smashed="yes" rot="R90">
 <attribute name="NAME" x="34.798" y="1.27" size="1.016" layer="25" font="vector" rot="R90"/>
 <attribute name="VALUE" x="37.338" y="1.27" size="1.016" layer="27" font="vector" rot="R90"/>
 </element>
